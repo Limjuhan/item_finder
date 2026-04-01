@@ -1,6 +1,6 @@
 package com.itemfinder.domain.product;
 
-import com.itemfinder.crawler.MusinsaCrawlerService;
+import com.itemfinder.crawler.PlatformCrawler;
 import com.itemfinder.domain.price.ProductPriceRepository;
 import com.itemfinder.dto.PriceInfoDto;
 import com.itemfinder.dto.ProductSearchResponse;
@@ -18,7 +18,7 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final ProductPriceRepository productPriceRepository;
-    private final MusinsaCrawlerService musinsaCrawlerService;
+    private final List<PlatformCrawler> crawlers;
 
     public List<ProductSearchResponse> search(String query) {
         if (query == null || query.isBlank()) {
@@ -26,8 +26,8 @@ public class ProductService {
         }
 
         String keyword = query.trim();
-        log.info("Keyword '{}' — crawling Musinsa", keyword);
-        musinsaCrawlerService.crawl(keyword);
+        log.info("Keyword '{}' — crawling all platforms", keyword);
+        crawlers.forEach(c -> c.crawl(keyword));
 
         return queryFromDb(keyword);
     }

@@ -24,7 +24,7 @@ import java.util.List;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class MusinsaCrawlerService {
+public class MusinsaCrawlerService implements PlatformCrawler {
 
     private static final String PLATFORM = "musinsa";
     private static final String SEARCH_API = "https://api.musinsa.com/api2/dp/v1/plp/goods";
