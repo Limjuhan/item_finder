@@ -103,6 +103,21 @@ cd frontend && npm run dev
 
 ---
 
+## 커밋 메시지 규칙
+
+**형식:** `type: 설명`
+
+| Type | 설명 | 예시 |
+|------|------|------|
+| `feat` | 새로운 기능 추가 | `feat: Musinsa 상품 크롤링 기능 추가` |
+| `fix` | 버그 수정 | `fix: 검색 결과 중복 제거` |
+| `refactor` | 코드 리팩토링 (기능 변화 없음) | `refactor: ProductService 구조 개선` |
+| `docs` | 문서 작성/수정 | `docs: README 배포 방법 추가` |
+| `chore` | 설정/의존성/빌드 관련 | `chore: New Relic APM 에이전트 추가` |
+| `test` | 테스트 코드 추가/수정 | `test: ProductService 검색 테스트 추가` |
+
+---
+
 ## Phase 2 예정
 - 29cm, 쿠팡 등 플랫폼 추가 (`product_prices` 테이블에 row 추가만 하면 됨)
 - 가격 변동 그래프
