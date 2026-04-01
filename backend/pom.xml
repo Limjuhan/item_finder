@@ -59,11 +59,6 @@
 			<artifactId>jsoup</artifactId>
 			<version>1.17.2</version>
 		</dependency>
-		<dependency>
-			<groupId>com.newrelic.agent.java</groupId>
-			<artifactId>newrelic-agent</artifactId>
-			<version>8.11.0</version>
-		</dependency>
 	</dependencies>
 
 	<build>
