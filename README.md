@@ -60,10 +60,12 @@ MySQL에 저장      │
    │  (초과: search_history 시간 업데이트)
    │              │
    ▼              ▼
-     DB에서 조회 (LIKE %keyword%)
+  DB에서 조회 (product_name, brand, product_code LIKE %keyword%)
              │
              ▼
        결과 반환 (최저가 정렬)
+
+※ 프론트엔드에서 동일 키워드 재검색 시 5분간 서버 요청 없이 캐시 반환 (React Query staleTime)
 ```
 
 ---
@@ -76,6 +78,7 @@ CREATE TABLE products (
   id            BIGINT PRIMARY KEY AUTO_INCREMENT,
   product_name  VARCHAR(255) NOT NULL,
   product_code  VARCHAR(100) UNIQUE,       -- 무신사 goodsNo
+  category      VARCHAR(100),
   brand         VARCHAR(100),
   image_url     TEXT,
   created_at    TIMESTAMP,
@@ -125,6 +128,8 @@ CREATE TABLE search_history (
 ```sql
 CREATE DATABASE itemfinder CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
+
+> `application.properties` 기준 포트: **3307**, 계정: `root` / `1234`
 
 ### 2. 백엔드 실행
 ```bash
