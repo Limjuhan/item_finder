@@ -15,10 +15,9 @@ React(Vite) + Spring Boot + MySQL 구성.
 
 ## 핵심 아키텍처 결정
 
-### 검색 흐름 (방향 B: 캐싱 + 실시간 크롤링)
-1. 검색어를 `search_history` 테이블에서 조회
-2. 없거나 6시간 초과 → 무신사 API 실시간 크롤링 → DB 저장
-3. 이내 → DB에서 직접 반환
+### 검색 흐름 (매 요청마다 실시간 크롤링)
+1. 검색어로 무신사 API 실시간 크롤링 → DB upsert
+2. DB에서 조회 후 반환 (캐시 없음, search_history 미사용)
 
 ### 무신사 크롤링 방식
 - Jsoup 사용 불가 (JS 렌더링 페이지)
@@ -36,7 +35,7 @@ React(Vite) + Spring Boot + MySQL 구성.
 ### ProductService.search()
 - `@Transactional` **없음** (의도적)
 - 이유: MySQL REPEATABLE READ 특성상 외부 트랜잭션 안에서 크롤러가 커밋한 데이터가 보이지 않음
-- 하위 호출(SearchHistoryRepository, MusinsaCrawlerService)이 각자 트랜잭션 관리
+- 하위 호출(MusinsaCrawlerService)이 각자 트랜잭션 관리
 
 ### MusinsaCrawlerService.upsert()
 - `@Transactional(propagation = REQUIRES_NEW)` — 상품 1건 단위 독립 트랜잭션
