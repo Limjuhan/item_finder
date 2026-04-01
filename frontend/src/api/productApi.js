@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const api = axios.create({ baseURL: '/api' });
+const baseURL = import.meta.env.VITE_API_URL ?? '/api';
+const api = axios.create({ baseURL });
 
 export const searchProducts = (query) =>
   api.get('/products/search', { params: { query } }).then(r => r.data);
