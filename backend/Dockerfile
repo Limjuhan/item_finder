@@ -9,8 +9,10 @@ RUN mvn clean package -DskipTests
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 
-# 빌드된 New Relic Agent 복사
-COPY --from=builder /app/target/newrelic /opt/newrelic
+# New Relic Agent JAR 다운로드
+RUN mkdir -p /opt/newrelic && \
+    curl -L -o /opt/newrelic/newrelic.jar \
+    https://repo1.maven.org/maven2/com/newrelic/agent/java/newrelic-agent/8.17.0/newrelic-agent-8.17.0.jar
 
 # 애플리케이션 JAR 복사
 COPY --from=builder /app/target/*.jar app.jar
