@@ -9,12 +9,12 @@ RUN mvn clean package -DskipTests
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 
-# New Relic Agent 다운로드
-RUN mkdir -p /opt/newrelic && \
-    curl -o /opt/newrelic/newrelic.jar \
-    https://download.newrelic.com/newrelic/java-agent/newrelic-agent/8.17.0/newrelic.jar
+# 빌드된 New Relic Agent 복사
+COPY --from=builder /app/target/newrelic /opt/newrelic
 
+# 애플리케이션 JAR 복사
 COPY --from=builder /app/target/*.jar app.jar
+
 EXPOSE 8080
 
 # New Relic Agent 활성화
