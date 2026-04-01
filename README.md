@@ -1,98 +1,8 @@
 # ItemFinder — 패션 가격 비교 웹앱
 
-무신사 등 패션 e-커머스 플랫폼의 상품존재 유무확인 및 가격을 검색하고 확인하는 웹앱입니다.
+무신사 등 패션 e-커머스 플랫폼의 상품 존재 유무확인 및 가격을 검색하고 확인하는 웹앱입니다.
 
 > 기술 선택 이유 및 주요 문제 해결 → [docs/TECHNICAL_DECISIONS.md](docs/TECHNICAL_DECISIONS.md)
-
----
-
-## 시스템 아키텍처
-
-```
-┌─────────────────────────────────────┐
-│         React Frontend              │
-│  localhost:5173                     │
-│  - 검색창                           │
-│  - 상품 카드 리스트                  │
-└──────────────┬──────────────────────┘
-               │ REST API (Vite Proxy)
-               ▼
-┌─────────────────────────────────────┐
-│       Spring Boot Backend           │
-│  localhost:8080                     │
-│  - 검색 API                         │
-│  - 캐시 만료 체크                    │
-│  - 크롤링 트리거                     │
-└──────────┬──────────────────────────┘
-           │                │
-           ▼                ▼
-    ┌──────────┐    ┌──────────────────┐
-    │  MySQL   │    │  무신사 내부 API  │
-    │  DB      │    │  (크롤링 대상)    │
-    └──────────┘    └──────────────────┘
-```
-
----
-
-## 검색 흐름
-
-```
-사용자가 키워드 입력
-        │
-        ▼
-무신사 API 호출 (매 요청마다 실시간 크롤링)
-        │
-        ▼
-MySQL에 upsert 저장
-        │
-        ▼
-DB에서 조회 (product_name, brand, product_code LIKE %keyword%)
-        │
-        ▼
-결과 반환 (최저가 정렬)
-
-※ 프론트엔드에서 동일 키워드 재검색 시 5분간 서버 요청 없이 캐시 반환 (React Query staleTime)
-```
-
----
-
-## DB 설계
-
-```sql
--- 상품 마스터
-CREATE TABLE products (
-  id            BIGINT PRIMARY KEY AUTO_INCREMENT,
-  product_name  VARCHAR(255) NOT NULL,
-  product_code  VARCHAR(100) UNIQUE,       -- 무신사 goodsNo
-  category      VARCHAR(100),
-  brand         VARCHAR(100),
-  image_url     TEXT,
-  created_at    TIMESTAMP,
-  updated_at    TIMESTAMP
-);
-
--- 플랫폼별 가격 (플랫폼 추가 시 row 추가)
-CREATE TABLE product_prices (
-  id                  BIGINT PRIMARY KEY AUTO_INCREMENT,
-  product_id          BIGINT NOT NULL REFERENCES products(id),
-  platform            VARCHAR(50) NOT NULL,  -- 'musinsa', '29cm', 'coupang' 등
-  platform_product_id VARCHAR(255),
-  price               INT NOT NULL,
-  original_price      INT,
-  discount_rate       INT,
-  in_stock            BOOLEAN,
-  url                 TEXT,
-  last_updated        TIMESTAMP,
-  UNIQUE KEY (product_id, platform)
-);
-
--- 검색 키워드 캐시 관리
-CREATE TABLE search_history (
-  id           BIGINT PRIMARY KEY AUTO_INCREMENT,
-  keyword      VARCHAR(255) NOT NULL UNIQUE,
-  last_crawled TIMESTAMP NOT NULL
-);
-```
 
 ---
 
@@ -130,7 +40,73 @@ npm run dev
 ```
 
 ### 4. 접속
-`http://localhost:5173` — 검색창에 키워드 입력 (첫 검색은 크롤링으로 2~3초 소요)
+`http://localhost:5173` — 검색창에 키워드 입력 (검색마다 무신사 실시간 크롤링, 2~3초 소요)
+
+---
+
+## 시스템 아키텍처
+
+```
+┌─────────────────────────────────────┐
+│         React Frontend              │
+│  localhost:5173                     │
+│  - 검색창                           │
+│  - 상품 카드 리스트                  │
+└──────────────┬──────────────────────┘
+               │ REST API (Vite Proxy)
+               ▼
+┌─────────────────────────────────────┐
+│       Spring Boot Backend           │
+│  localhost:8080                     │
+│  - 검색 API                         │
+│  - 크롤링 트리거                     │
+└──────────┬──────────────────────────┘
+           │                │
+           ▼                ▼
+    ┌──────────┐    ┌──────────────────┐
+    │  MySQL   │    │  무신사 내부 API  │
+    │  DB      │    │  (크롤링 대상)    │
+    └──────────┘    └──────────────────┘
+```
+
+검색 흐름: 키워드 입력 → 무신사 API 실시간 크롤링 → MySQL upsert → DB 조회 → 최저가 정렬 반환
+
+※ 프론트엔드에서 동일 키워드 재검색 시 5분간 서버 요청 없이 캐시 반환 (React Query staleTime)
+
+---
+
+## DB 설계
+
+```sql
+-- 상품 마스터
+CREATE TABLE products (
+  id            BIGINT PRIMARY KEY AUTO_INCREMENT,
+  product_name  VARCHAR(255) NOT NULL,
+  product_code  VARCHAR(100) UNIQUE,       -- 무신사 goodsNo
+  category      VARCHAR(100),
+  brand         VARCHAR(100),
+  image_url     TEXT,
+  created_at    TIMESTAMP,
+  updated_at    TIMESTAMP
+);
+
+-- 플랫폼별 가격 (플랫폼 추가 시 row 추가)
+CREATE TABLE product_prices (
+  id                  BIGINT PRIMARY KEY AUTO_INCREMENT,
+  product_id          BIGINT NOT NULL REFERENCES products(id),
+  platform            VARCHAR(50) NOT NULL,  -- 'musinsa', '29cm', 'coupang' 등
+  platform_product_id VARCHAR(255),
+  price               INT NOT NULL,
+  original_price      INT,
+  discount_rate       INT,
+  in_stock            BOOLEAN,
+  url                 TEXT,
+  last_updated        TIMESTAMP,
+  UNIQUE KEY (product_id, platform)
+);
+```
+
+**설계 포인트:** `product_prices` 테이블을 분리하여 향후 29cm, 쿠팡 등 플랫폼 추가 시 `products` 테이블 변경 없이 row만 추가
 
 ---
 
@@ -147,7 +123,7 @@ ItemFinder/
 │       ├── domain/
 │       │   ├── product/     # 상품 엔티티, 서비스, 컨트롤러
 │       │   ├── price/       # 가격 엔티티
-│       │   └── search/      # 검색 히스토리
+│       │   └── search/      # 검색 히스토리 (미사용, Phase 2 캐싱 예정)
 │       └── dto/             # API 응답 DTO
 └── frontend/
     └── src/
