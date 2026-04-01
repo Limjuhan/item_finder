@@ -8,7 +8,7 @@
 
 ## 배포된 앱
 
-**🌐 접속:** [https://item-finder-navy.vercel.app](https://item-finder-navy.vercel.app)
+**접속:** [https://item-finder-navy.vercel.app](https://item-finder-navy.vercel.app)
 
 ---
 
