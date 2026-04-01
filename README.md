@@ -6,6 +6,12 @@
 
 ---
 
+## 배포된 앱
+
+**🌐 접속:** [https://item-finder-navy.vercel.app](https://item-finder-navy.vercel.app)
+
+---
+
 ## 기술 스택
 
 | 구분 | 기술 |
@@ -18,7 +24,7 @@
 
 ---
 
-## 실행 방법
+## 로컬 개발 환경 실행
 
 ### 1. MySQL 설정
 ```sql
