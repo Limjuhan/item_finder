@@ -18,7 +18,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,8 +31,8 @@ public class MusinsaCrawlerService {
 
     private final ProductRepository productRepository;
     private final ProductPriceRepository productPriceRepository;
-    private final ObjectMapper objectMapper = new ObjectMapper();
-    private final HttpClient httpClient = HttpClient.newHttpClient();
+    private final ObjectMapper objectMapper;
+    private final HttpClient httpClient;
 
     public int crawl(String query) {
         log.info("Crawling Musinsa for query: {}", query);
@@ -133,7 +132,6 @@ public class MusinsaCrawlerService {
         price.setDiscountRate(cp.discountRate());
         price.setUrl(cp.url());
         price.setInStock(true);
-        price.setLastUpdated(LocalDateTime.now());
 
         productPriceRepository.save(price);
     }
