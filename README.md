@@ -40,30 +40,16 @@
 사용자가 키워드 입력
         │
         ▼
-search_history에 키워드 있나?
+무신사 API 호출 (매 요청마다 실시간 크롤링)
         │
-   ┌────┴────┐
-  없음      있음
-   │         │
-   │    last_crawled가 6시간 초과?
-   │         │
-   │    ┌────┴────┐
-   │   초과     이내
-   │    │         │
-   ▼    ▼         │
-무신사 API 호출   │
-(실시간 크롤링)   │
-   │              │
-   ▼              │
-MySQL에 저장      │
-   │  (없음: search_history 신규 저장)
-   │  (초과: search_history 시간 업데이트)
-   │              │
-   ▼              ▼
-  DB에서 조회 (product_name, brand, product_code LIKE %keyword%)
-             │
-             ▼
-       결과 반환 (최저가 정렬)
+        ▼
+MySQL에 upsert 저장
+        │
+        ▼
+DB에서 조회 (product_name, brand, product_code LIKE %keyword%)
+        │
+        ▼
+결과 반환 (최저가 정렬)
 
 ※ 프론트엔드에서 동일 키워드 재검색 시 5분간 서버 요청 없이 캐시 반환 (React Query staleTime)
 ```
