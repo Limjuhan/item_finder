@@ -48,4 +48,10 @@ public class ProductPrice {
 
     @Column(name = "last_updated")
     private LocalDateTime lastUpdated;
+
+    @PrePersist
+    @PreUpdate
+    protected void onUpdate() {
+        lastUpdated = LocalDateTime.now();
+    }
 }
