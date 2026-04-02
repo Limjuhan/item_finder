@@ -17,6 +17,9 @@ RUN mkdir -p /opt/newrelic && \
 # 애플리케이션 JAR 복사
 COPY --from=builder /app/target/*.jar app.jar
 
+# New Relic 설정 파일 복사
+COPY --from=builder /app/target/newrelic/newrelic.yml /opt/newrelic/newrelic.yml
+
 EXPOSE 8080
 
 # New Relic Agent 활성화
