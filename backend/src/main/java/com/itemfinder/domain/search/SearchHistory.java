@@ -30,9 +30,4 @@ public class SearchHistory {
     public void updateCrawledTime() {
         this.lastCrawled = LocalDateTime.now();
     }
-
-    public boolean isExpired(int hours) {
-        return lastCrawled == null ||
-               lastCrawled.isBefore(LocalDateTime.now().minusHours(hours));
-    }
 }
