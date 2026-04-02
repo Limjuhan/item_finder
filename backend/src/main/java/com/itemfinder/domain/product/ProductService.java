@@ -1,10 +1,9 @@
 package com.itemfinder.domain.product;
 
 import com.itemfinder.crawler.PlatformCrawler;
-import com.itemfinder.domain.price.ProductPriceRepository;
+import com.itemfinder.domain.listing.ProductListingRepository;
 import com.itemfinder.domain.search.SearchHistory;
 import com.itemfinder.domain.search.SearchHistoryRepository;
-import com.itemfinder.dto.PriceInfoDto;
 import com.itemfinder.dto.ProductSearchResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,8 +18,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ProductService {
 
-    private final ProductRepository productRepository;
-    private final ProductPriceRepository productPriceRepository;
+    private final ProductListingRepository productListingRepository;
     private final SearchHistoryRepository searchHistoryRepository;
     private final List<PlatformCrawler> crawlers;
 
@@ -37,8 +35,8 @@ public class ProductService {
         try {
             searchHistoryRepository.findByKeyword(keyword)
                     .ifPresentOrElse(
-                            sh -> sh.updateCrawledTime(),  // 기존: 시간만 업데이트
-                            () -> searchHistoryRepository.save(new SearchHistory(keyword))  // 신규: 저장
+                            sh -> sh.updateCrawledTime(),
+                            () -> searchHistoryRepository.save(new SearchHistory(keyword))
                     );
         } catch (DataIntegrityViolationException e) {
             // 동시 요청으로 중복 INSERT 발생 시 무시 (이미 크롤링 데이터는 저장됨)
@@ -49,20 +47,9 @@ public class ProductService {
     }
 
     private List<ProductSearchResponse> queryFromDb(String keyword) {
-        List<Product> products = productRepository.searchByNameOrBrand(keyword);
-
-        return products.stream()
-                .map(product -> {
-                    List<PriceInfoDto> prices = productPriceRepository
-                            .findByProductId(product.getId())
-                            .stream()
-                            .map(PriceInfoDto::new)
-                            .sorted(Comparator.comparingInt(PriceInfoDto::getPrice))
-                            .toList();
-                    return new ProductSearchResponse(product, prices);
-                })
-                .filter(r -> !r.getPrices().isEmpty())
-                .sorted(Comparator.comparingInt(ProductSearchResponse::getLowestPrice))
+        return productListingRepository.searchByKeyword(keyword).stream()
+                .map(ProductSearchResponse::new)
+                .sorted(Comparator.comparingInt(ProductSearchResponse::getPrice))
                 .toList();
     }
 }
