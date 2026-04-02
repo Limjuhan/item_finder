@@ -1,8 +1,9 @@
 # ItemFinder 프로젝트 가이드
 
 ## 프로젝트 개요
-무신사 등 패션 e-커머스의 상품 가격을 비교하는 웹앱.
-React(Vite) + Spring Boot + MySQL 구성.
+**목표**: 패션 e-커머스(무신사, 29cm 등) 플랫폼에서 상품 가격을 검색 및 비교하여, 이용자가 원하는 상품을 **어느 플랫폼에서 얼마에 구매할 수 있는지 한눈에 확인**하도록 도와주는 웹앱.
+
+**스택**: React 18 (Vite) + Spring Boot 3.5 + MySQL 8.0
 
 ---
 
@@ -16,13 +17,25 @@ React(Vite) + Spring Boot + MySQL 구성.
 ## 핵심 아키텍처 결정
 
 ### 검색 흐름 (매 요청마다 실시간 크롤링)
-1. 검색어로 무신사 API 실시간 크롤링 → DB upsert
-2. DB에서 조회 후 반환 (캐시 없음, search_history 미사용)
+1. 각 플랫폼에서 실시간 크롤링 (최대 10개)
+2. DB upsert (새 상품은 INSERT, 기존 상품은 UPDATE)
+3. search_history에 키워드 저장 또는 업데이트
+4. DB에서 조회 후 가격 낮은 순으로 정렬해 반환
+
+**Why 매번 크롤링:**
+- 항상 최신 가격 정보 보장
+- 이용자가 어느 플랫폼에서 얼마에 구매할 수 있는지 정확히 파악 가능
+
+**search_history 용도:**
+- Phase 2 예정: "자주 검색된 키워드 자동 갱신 스케줄러"
+- 키워드별 last_crawled 시간 추적 (frequency 분석용)
 
 ### 무신사 크롤링 방식
 - Jsoup 사용 불가 (JS 렌더링 페이지)
-- 무신사 내부 API 직접 호출:
-  `https://api.musinsa.com/api2/dp/v1/plp/goods?keyword=...&gf=M&pageNumber=1&pageSize=50&sortCode=POPULAR&caller=SEARCH`
+- 무신사 내부 API 직접 호출
+- **최대 10개 상품만** 크롤링 (성능 최적화)
+- API: `https://api.musinsa.com/api2/dp/v1/plp/goods?keyword=...&gf=M&pageNumber=1&pageSize=50&sortCode=POPULAR&caller=SEARCH`
+- 상세: first N=10을 파싱해서 저장 (pageNumber 파라미터 미작동 확인)
 
 ### DB 검색 방식
 - `LIKE %keyword%` 로 `product_name`, `brand`, `product_code` 검색

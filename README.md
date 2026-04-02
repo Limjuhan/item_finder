@@ -1,6 +1,6 @@
 # ItemFinder — 패션 가격 비교 웹앱
 
-무신사 등 패션 e-커머스 플랫폼의 상품 존재 유무확인 및 가격을 검색하고 확인하는 웹앱입니다.
+**목표**: 패션 e-커머스(무신사, 29cm 등) 플랫폼에서 상품 가격을 검색하여, 이용자가 원하는 상품을 **어느 플랫폼에서 얼마에 구매할 수 있는지 한눈에 확인**하도록 도와주는 웹앱입니다.
 
 > 기술 선택 이유 및 주요 문제 해결 → [docs/TECHNICAL_DECISIONS.md](docs/TECHNICAL_DECISIONS.md)
 
@@ -8,7 +8,7 @@
 
 ## 배포된 앱
 
-**접속:** [https://item-finder-navy.vercel.app](https://item-finder-navy.vercel.app)
+**접속:** [https://item-finder-oapp.onrender.com](https://item-finder-oapp.onrender.com)
 
 ---
 
@@ -19,8 +19,10 @@
 | Backend | Java 21, Spring Boot 3.5, Spring Data JPA |
 | Database | MySQL 8.0 |
 | 크롤링 | Java HttpClient + Jackson (무신사 내부 API) |
-| Frontend | React 18, Vite, TanStack Query, Axios |
+| Frontend | React 18, Vite, TanStack Query v5, Axios |
 | 스타일 | Tailwind CSS v3 |
+| 모니터링 | New Relic APM (Java Agent) |
+| 배포 | Docker, Render |
 
 ---
 
@@ -46,7 +48,7 @@ npm run dev
 ```
 
 ### 4. 접속
-`http://localhost:5173` — 검색창에 키워드 입력 (검색마다 무신사 실시간 크롤링, 2~3초 소요)
+`http://localhost:5173` — 검색창에 키워드 입력 (매번 실시간 크롤링, 1~2초 소요)
 
 ---
 
@@ -56,28 +58,35 @@ npm run dev
 ┌─────────────────────────────────────┐
 │         React Frontend              │
 │  localhost:5173                     │
-│  - 검색창                           │
+│  - 검색창 (400ms 디바운스)           │
 │  - 상품 카드 리스트                  │
 └──────────────┬──────────────────────┘
-               │ REST API (Vite Proxy)
+               │ REST API (Axios)
                ▼
 ┌─────────────────────────────────────┐
 │       Spring Boot Backend           │
-│  localhost:8080                     │
-│  - 검색 API                         │
-│  - 크롤링 트리거                     │
+│  localhost:8080 / Render            │
+│  - 검색 API (GET /api/products/search) │
+│  - 크롤러 (최대 10개 상품)           │
 └──────────┬──────────────────────────┘
            │                │
            ▼                ▼
     ┌──────────┐    ┌──────────────────┐
     │  MySQL   │    │  무신사 내부 API  │
-    │  DB      │    │  (크롤링 대상)    │
+    │  DB      │    │  (JSON 응답)      │
     └──────────┘    └──────────────────┘
 ```
 
-검색 흐름: 키워드 입력 → 무신사 API 실시간 크롤링 → MySQL upsert → DB 조회 → 최저가 정렬 반환
+**검색 흐름**
+1. 사용자가 검색어 입력 (예: "아이더")
+2. Spring Boot에서 무신사 API 실시간 크롤링 (최대 10개)
+3. DB에 upsert (새 상품은 INSERT, 기존 상품은 UPDATE)
+4. search_history에 키워드 저장 (Phase 2 스케줄러용)
+5. 결과를 가격 낮은 순으로 정렬해 반환
+6. React에서 React Query 캐시 적용 (staleTime 5분) — 같은 키워드 재검색 시 네트워크 요청 스킵
 
-※ 프론트엔드에서 동일 키워드 재검색 시 5분간 서버 요청 없이 캐시 반환 (React Query staleTime)
+**특징: 항상 최신 가격 정보**
+- 매번 크롤링하므로 상품 품절, 가격 변동을 즉시 반영
 
 ---
 

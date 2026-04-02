@@ -35,13 +35,19 @@ public class MusinsaCrawlerService implements PlatformCrawler {
     private final HttpClient httpClient;
 
     public int crawl(String query) {
-        log.info("Crawling Musinsa for query: {}", query);
+        long startTime = System.currentTimeMillis();
+        log.info("[1] Starting Musinsa crawl for query: {}", query);
+
+        long fetchStart = System.currentTimeMillis();
         List<CrawledProduct> crawledProducts = fetchFromMusinsa(query);
+        long fetchTime = System.currentTimeMillis() - fetchStart;
+        log.info("[2] API fetch completed in {}ms, found {} products", fetchTime, crawledProducts.size());
 
         if (crawledProducts.isEmpty()) {
             return 0;
         }
 
+        long saveStart = System.currentTimeMillis();
         int saved = 0;
         for (CrawledProduct cp : crawledProducts) {
             try {
@@ -51,8 +57,11 @@ public class MusinsaCrawlerService implements PlatformCrawler {
                 log.warn("Failed to save '{}': {}", cp.name(), e.getMessage());
             }
         }
+        long saveTime = System.currentTimeMillis() - saveStart;
+        log.info("[3] DB save completed in {}ms, saved {} products", saveTime, saved);
 
-        log.info("Saved {} products for query '{}'", saved, query);
+        long totalTime = System.currentTimeMillis() - startTime;
+        log.info("[4] Total crawl time: {}ms (fetch: {}ms + save: {}ms)", totalTime, fetchTime, saveTime);
         return saved;
     }
 
@@ -82,7 +91,9 @@ public class MusinsaCrawlerService implements PlatformCrawler {
             JsonNode root = objectMapper.readTree(response.body());
             JsonNode list = root.path("data").path("list");
 
-            for (JsonNode item : list) {
+            int maxProducts = Math.min(10, list.size()); // 최대 10개
+            for (int i = 0; i < maxProducts; i++) {
+                JsonNode item = list.get(i);
                 if (item.path("isSoldOut").asBoolean(false)) continue;
 
                 String goodsNo = item.path("goodsNo").asText();
