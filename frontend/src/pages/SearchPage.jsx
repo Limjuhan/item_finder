@@ -20,9 +20,22 @@ export default function SearchPage() {
 
       <main className="max-w-5xl mx-auto px-4 py-8">
         {!query && (
-          <p className="text-center text-gray-400 mt-20 text-sm">
-            검색어를 입력하세요 (예: 아디다스, 나이키 에어포스)
-          </p>
+          <div className="text-center mt-16 space-y-4">
+            <p className="text-gray-600 text-sm font-medium">
+              정확한 검색을 위해 상품명 또는 브랜드를 입력하세요
+            </p>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
+              <p className="text-gray-700 text-sm mb-2"><strong>검색 팁:</strong></p>
+              <ul className="text-gray-600 text-xs space-y-1 text-left">
+                <li>✓ 상품명: "플렉션 하이브리드", "에어포스"</li>
+                <li>✓ 브랜드: "아이더", "나이키", "아디다스"</li>
+                <li>✓ 정확한 상품 코드가 있으면 더 정확한 검색이 됩니다</li>
+              </ul>
+            </div>
+            <p className="text-gray-400 text-xs mt-4">
+              예: 아디다스, 나이키 에어포스, 아이더 플렉션
+            </p>
+          </div>
         )}
 
         {query.length > 0 && query.length < 2 && (
