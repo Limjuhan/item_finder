@@ -1,10 +1,9 @@
 package com.itemfinder.domain.product;
 
-import com.itemfinder.crawler.MusinsaCrawlerService;
-import com.itemfinder.domain.price.ProductPriceRepository;
+import com.itemfinder.crawler.PlatformCrawler;
+import com.itemfinder.domain.listing.ProductListingRepository;
 import com.itemfinder.domain.search.SearchHistory;
 import com.itemfinder.domain.search.SearchHistoryRepository;
-import com.itemfinder.dto.PriceInfoDto;
 import com.itemfinder.dto.ProductSearchResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,12 +18,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ProductService {
 
-    private static final int CACHE_EXPIRE_HOURS = 6;
-
-    private final ProductRepository productRepository;
-    private final ProductPriceRepository productPriceRepository;
+    private final ProductListingRepository productListingRepository;
     private final SearchHistoryRepository searchHistoryRepository;
-    private final MusinsaCrawlerService musinsaCrawlerService;
+    private final List<PlatformCrawler> crawlers;
 
     public List<ProductSearchResponse> search(String query) {
         if (query == null || query.isBlank()) {
@@ -32,44 +28,28 @@ public class ProductService {
         }
 
         String keyword = query.trim();
-        SearchHistory history = searchHistoryRepository.findByKeyword(keyword).orElse(null);
+        log.info("Keyword '{}' — crawling all platforms", keyword);
+        crawlers.forEach(c -> c.crawl(keyword));
 
-        if (history == null) {
-            log.info("New keyword '{}' — crawling Musinsa", keyword);
-            musinsaCrawlerService.crawl(keyword);
-            try {
-                searchHistoryRepository.save(new SearchHistory(keyword));
-            } catch (DataIntegrityViolationException e) {
-                // 동시 요청으로 이미 저장된 경우 무시
-                log.debug("SearchHistory already saved for keyword '{}'", keyword);
-            }
-        } else if (history.isExpired(CACHE_EXPIRE_HOURS)) {
-            log.info("Keyword '{}' expired — re-crawling Musinsa", keyword);
-            musinsaCrawlerService.crawl(keyword);
-            history.updateCrawledTime();
-            searchHistoryRepository.save(history);
-        } else {
-            log.info("Keyword '{}' — returning cached DB results", keyword);
+        // search_history 저장 (Phase 2 스케줄러용: 자주 검색된 키워드 추적)
+        try {
+            searchHistoryRepository.findByKeyword(keyword)
+                    .ifPresentOrElse(
+                            sh -> sh.updateCrawledTime(),
+                            () -> searchHistoryRepository.save(new SearchHistory(keyword))
+                    );
+        } catch (DataIntegrityViolationException e) {
+            // 동시 요청으로 중복 INSERT 발생 시 무시 (이미 크롤링 데이터는 저장됨)
+            log.debug("Search history already exists for keyword: {}", keyword);
         }
 
         return queryFromDb(keyword);
     }
 
     private List<ProductSearchResponse> queryFromDb(String keyword) {
-        List<Product> products = productRepository.searchByNameOrBrand(keyword);
-
-        return products.stream()
-                .map(product -> {
-                    List<PriceInfoDto> prices = productPriceRepository
-                            .findByProductId(product.getId())
-                            .stream()
-                            .map(PriceInfoDto::new)
-                            .sorted(Comparator.comparingInt(PriceInfoDto::getPrice))
-                            .toList();
-                    return new ProductSearchResponse(product, prices);
-                })
-                .filter(r -> !r.getPrices().isEmpty())
-                .sorted(Comparator.comparingInt(ProductSearchResponse::getLowestPrice))
+        return productListingRepository.searchByKeyword(keyword).stream()
+                .map(ProductSearchResponse::new)
+                .sorted(Comparator.comparingInt(ProductSearchResponse::getPrice))
                 .toList();
     }
 }

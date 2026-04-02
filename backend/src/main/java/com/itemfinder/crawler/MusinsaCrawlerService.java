@@ -2,10 +2,8 @@ package com.itemfinder.crawler;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.itemfinder.domain.price.ProductPrice;
-import com.itemfinder.domain.price.ProductPriceRepository;
-import com.itemfinder.domain.product.Product;
-import com.itemfinder.domain.product.ProductRepository;
+import com.itemfinder.domain.listing.ProductListing;
+import com.itemfinder.domain.listing.ProductListingRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,31 +16,35 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class MusinsaCrawlerService {
+public class MusinsaCrawlerService implements PlatformCrawler {
 
     private static final String PLATFORM = "musinsa";
     private static final String SEARCH_API = "https://api.musinsa.com/api2/dp/v1/plp/goods";
 
-    private final ProductRepository productRepository;
-    private final ProductPriceRepository productPriceRepository;
-    private final ObjectMapper objectMapper = new ObjectMapper();
-    private final HttpClient httpClient = HttpClient.newHttpClient();
+    private final ProductListingRepository productListingRepository;
+    private final ObjectMapper objectMapper;
+    private final HttpClient httpClient;
 
     public int crawl(String query) {
-        log.info("Crawling Musinsa for query: {}", query);
+        long startTime = System.currentTimeMillis();
+        log.info("[1] Starting Musinsa crawl for query: {}", query);
+
+        long fetchStart = System.currentTimeMillis();
         List<CrawledProduct> crawledProducts = fetchFromMusinsa(query);
+        long fetchTime = System.currentTimeMillis() - fetchStart;
+        log.info("[2] API fetch completed in {}ms, found {} products", fetchTime, crawledProducts.size());
 
         if (crawledProducts.isEmpty()) {
             return 0;
         }
 
+        long saveStart = System.currentTimeMillis();
         int saved = 0;
         for (CrawledProduct cp : crawledProducts) {
             try {
@@ -52,8 +54,11 @@ public class MusinsaCrawlerService {
                 log.warn("Failed to save '{}': {}", cp.name(), e.getMessage());
             }
         }
+        long saveTime = System.currentTimeMillis() - saveStart;
+        log.info("[3] DB save completed in {}ms, saved {} products", saveTime, saved);
 
-        log.info("Saved {} products for query '{}'", saved, query);
+        long totalTime = System.currentTimeMillis() - startTime;
+        log.info("[4] Total crawl time: {}ms (fetch: {}ms + save: {}ms)", totalTime, fetchTime, saveTime);
         return saved;
     }
 
@@ -83,7 +88,9 @@ public class MusinsaCrawlerService {
             JsonNode root = objectMapper.readTree(response.body());
             JsonNode list = root.path("data").path("list");
 
-            for (JsonNode item : list) {
+            int maxProducts = Math.min(10, list.size()); // 최대 10개
+            for (int i = 0; i < maxProducts; i++) {
+                JsonNode item = list.get(i);
                 if (item.path("isSoldOut").asBoolean(false)) continue;
 
                 String goodsNo = item.path("goodsNo").asText();
@@ -112,30 +119,22 @@ public class MusinsaCrawlerService {
     // 상품 1건을 독립 트랜잭션으로 저장 — 실패해도 다른 상품 저장에 영향 없음
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void upsert(CrawledProduct cp) {
-        Product product = productRepository.findByProductCode(cp.productCode())
-                .orElse(new Product());
+        ProductListing listing = productListingRepository
+                .findByPlatformAndPlatformProductId(PLATFORM, cp.productCode())
+                .orElse(new ProductListing());
 
-        product.setProductCode(cp.productCode());
-        product.setProductName(cp.name());
-        product.setBrand(cp.brand());
-        product.setImageUrl(cp.imageUrl());
-        product = productRepository.save(product);
+        listing.setPlatform(PLATFORM);
+        listing.setPlatformProductId(cp.productCode());
+        listing.setProductName(cp.name());
+        listing.setBrand(cp.brand());
+        listing.setImageUrl(cp.imageUrl());
+        listing.setPrice(cp.price());
+        listing.setOriginalPrice(cp.originalPrice());
+        listing.setDiscountRate(cp.discountRate());
+        listing.setUrl(cp.url());
+        listing.setInStock(true);
 
-        ProductPrice price = productPriceRepository
-                .findByProductIdAndPlatform(product.getId(), PLATFORM)
-                .orElse(new ProductPrice());
-
-        price.setProduct(product);
-        price.setPlatform(PLATFORM);
-        price.setPlatformProductId(cp.productCode());
-        price.setPrice(cp.price());
-        price.setOriginalPrice(cp.originalPrice());
-        price.setDiscountRate(cp.discountRate());
-        price.setUrl(cp.url());
-        price.setInStock(true);
-        price.setLastUpdated(LocalDateTime.now());
-
-        productPriceRepository.save(price);
+        productListingRepository.save(listing);
     }
 
     record CrawledProduct(

@@ -1,9 +1,10 @@
 import axios from 'axios';
 
-const api = axios.create({ baseURL: '/api' });
+const baseURL = import.meta.env.VITE_API_URL ?? '/api';
+const api = axios.create({ baseURL });
 
-export const searchProducts = (query, page = 0) =>
-  api.get('/products/search', { params: { query, page } }).then(r => r.data);
+export const searchProducts = (query) =>
+  api.get('/products/search', { params: { query } }).then(r => r.data);
 
 export const crawlMusinsa = (query) =>
   api.post('/admin/crawl/musinsa', null, { params: { query } }).then(r => r.data);

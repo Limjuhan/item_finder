@@ -1,6 +1,5 @@
-package com.itemfinder.domain.price;
+package com.itemfinder.domain.listing;
 
-import com.itemfinder.domain.product.Product;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -9,27 +8,32 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "product_prices", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"product_id", "platform"})
+@Table(name = "product_listings", uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"platform", "platform_product_id"})
 })
 @Getter
 @Setter
 @NoArgsConstructor
-public class ProductPrice {
+public class ProductListing {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "product_id", nullable = false)
-    private Product product;
+    @Column(nullable = false)
+    private String platform;  // musinsa, 29cm, coupang 등
 
     @Column(nullable = false)
-    private String platform;
+    private String platformProductId;  // 플랫폼 내부 상품ID (goodsNo, productId 등)
 
-    @Column(name = "platform_product_id")
-    private String platformProductId;
+    @Column(nullable = false)
+    private String productName;  // 플랫폼별 상품명
+
+    @Column(nullable = false)
+    private String brand;
+
+    @Column(columnDefinition = "TEXT")
+    private String imageUrl;
 
     @Column(nullable = false)
     private Integer price;
@@ -49,7 +53,15 @@ public class ProductPrice {
     @Column(name = "last_updated")
     private LocalDateTime lastUpdated;
 
+    @Column(name = "created_at")
+    private LocalDateTime createdAt;
+
     @PrePersist
+    protected void onCreate() {
+        createdAt = LocalDateTime.now();
+        lastUpdated = LocalDateTime.now();
+    }
+
     @PreUpdate
     protected void onUpdate() {
         lastUpdated = LocalDateTime.now();

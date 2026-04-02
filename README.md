@@ -1,36 +1,12 @@
 # ItemFinder — 패션 가격 비교 웹앱
 
-무신사 등 패션 e-커머스 플랫폼의 상품 가격을 검색하고 비교하는 웹앱입니다.
+**목표**: 패션 e-커머스(무신사, 29cm 등) 플랫폼에서 상품 가격을 **실시간으로 검색하고 비교**하여, 이용자가 원하는 상품을 **어느 플랫폼에서 얼마에 구매할 수 있는지 한눈에 확인**하도록 도와주는 웹앱입니다.
 
 > 기술 선택 이유 및 주요 문제 해결 → [docs/TECHNICAL_DECISIONS.md](docs/TECHNICAL_DECISIONS.md)
 
 ---
 
-## 시스템 아키텍처
-
-```
-┌─────────────────────────────────────┐
-│         React Frontend              │
-│  localhost:5173                     │
-│  - 검색창                           │
-│  - 상품 카드 리스트                  │
-└──────────────┬──────────────────────┘
-               │ REST API (Vite Proxy)
-               ▼
-┌─────────────────────────────────────┐
-│       Spring Boot Backend           │
-│  localhost:8080                     │
-│  - 검색 API                         │
-│  - 캐시 만료 체크                    │
-│  - 크롤링 트리거                     │
-└──────────┬──────────────────────────┘
-           │                │
-           ▼                ▼
-    ┌──────────┐    ┌──────────────────┐
-    │  MySQL   │    │  무신사 내부 API  │
-    │  DB      │    │  (크롤링 대상)    │
-    └──────────┘    └──────────────────┘
-```
+## 배포
 
 ---
 
@@ -103,15 +79,11 @@ CREATE TABLE search_history (
 
 ---
 
-## 기술 스택
+다음 문서를 참고해주세요:
+- **기술 선택 이유**: React vs JSP, HttpClient vs Jsoup, 실시간 크롤링 vs 캐싱
+- **주요 문제 해결**: 트랜잭션 격리, 부분 실패 격리, 동시 요청 처리
 
-| 구분 | 기술 |
-|------|------|
-| Backend | Java 21, Spring Boot 3.5, Spring Data JPA |
-| Database | MySQL 8.0 |
-| 크롤링 | Java HttpClient + Jackson (무신사 내부 API) |
-| Frontend | React 18, Vite, TanStack Query, Axios |
-| 스타일 | Tailwind CSS v3 |
+➜ [**docs/TECHNICAL_DECISIONS.md**](docs/TECHNICAL_DECISIONS.md)
 
 ---
 
@@ -122,22 +94,11 @@ CREATE TABLE search_history (
 CREATE DATABASE itemfinder CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-### 2. 백엔드 실행
-```bash
-cd backend
-./mvnw spring-boot:run
-```
-
-### 3. 프론트엔드 실행
-```bash
-cd frontend
-npm run dev
-```
-
-### 4. 접속
-`http://localhost:5173` — 검색창에 키워드 입력 (첫 검색은 크롤링으로 2~3초 소요)
-
----
+**Phase 1 (현재 완성)**
+- ✅ 무신사 가격 검색 및 크롤링
+- ✅ 멀티 플랫폼 아키텍처 설계
+- ✅ 실시간 가격 동기화
+- ✅ Render 배포 + New Relic 모니터링
 
 ## 프로젝트 구조
 

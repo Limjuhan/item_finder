@@ -1,8 +1,9 @@
 # ItemFinder 프로젝트 가이드
 
 ## 프로젝트 개요
-무신사 등 패션 e-커머스의 상품 가격을 비교하는 웹앱.
-React(Vite) + Spring Boot + MySQL 구성.
+**목표**: 패션 e-커머스(무신사, 29cm 등) 플랫폼에서 상품 가격을 검색 및 비교하여, 이용자가 원하는 상품을 **어느 플랫폼에서 얼마에 구매할 수 있는지 한눈에 확인**하도록 도와주는 웹앱.
+
+**스택**: React 18 (Vite) + Spring Boot 3.5 + MySQL 8.0
 
 ---
 
@@ -15,15 +16,26 @@ React(Vite) + Spring Boot + MySQL 구성.
 
 ## 핵심 아키텍처 결정
 
-### 검색 흐름 (방향 B: 캐싱 + 실시간 크롤링)
-1. 검색어를 `search_history` 테이블에서 조회
-2. 없거나 6시간 초과 → 무신사 API 실시간 크롤링 → DB 저장
-3. 이내 → DB에서 직접 반환
+### 검색 흐름 (매 요청마다 실시간 크롤링)
+1. 각 플랫폼에서 실시간 크롤링 (최대 10개)
+2. DB upsert (새 상품은 INSERT, 기존 상품은 UPDATE)
+3. search_history에 키워드 저장 또는 업데이트
+4. DB에서 조회 후 가격 낮은 순으로 정렬해 반환
+
+**Why 매번 크롤링:**
+- 항상 최신 가격 정보 보장
+- 이용자가 어느 플랫폼에서 얼마에 구매할 수 있는지 정확히 파악 가능
+
+**search_history 용도:**
+- Phase 2 예정: "자주 검색된 키워드 자동 갱신 스케줄러"
+- 키워드별 last_crawled 시간 추적 (frequency 분석용)
 
 ### 무신사 크롤링 방식
 - Jsoup 사용 불가 (JS 렌더링 페이지)
-- 무신사 내부 API 직접 호출:
-  `https://api.musinsa.com/api2/dp/v1/plp/goods?keyword=...&gf=M&pageNumber=1&pageSize=50&sortCode=POPULAR&caller=SEARCH`
+- 무신사 내부 API 직접 호출
+- **최대 10개 상품만** 크롤링 (성능 최적화)
+- API: `https://api.musinsa.com/api2/dp/v1/plp/goods?keyword=...&gf=M&pageNumber=1&pageSize=50&sortCode=POPULAR&caller=SEARCH`
+- 상세: first N=10을 파싱해서 저장 (pageNumber 파라미터 미작동 확인)
 
 ### DB 검색 방식
 - `LIKE %keyword%` 로 `product_name`, `brand`, `product_code` 검색
@@ -36,7 +48,7 @@ React(Vite) + Spring Boot + MySQL 구성.
 ### ProductService.search()
 - `@Transactional` **없음** (의도적)
 - 이유: MySQL REPEATABLE READ 특성상 외부 트랜잭션 안에서 크롤러가 커밋한 데이터가 보이지 않음
-- 하위 호출(SearchHistoryRepository, MusinsaCrawlerService)이 각자 트랜잭션 관리
+- 하위 호출(MusinsaCrawlerService)이 각자 트랜잭션 관리
 
 ### MusinsaCrawlerService.upsert()
 - `@Transactional(propagation = REQUIRES_NEW)` — 상품 1건 단위 독립 트랜잭션
@@ -101,6 +113,29 @@ cd frontend && npm run dev
 - User: `root`
 - Password: `1234`
 - DDL: `spring.jpa.hibernate.ddl-auto=update`
+
+---
+
+## 작업 규칙
+
+**파괴적/비가역적 작업 (git push, git reset, 파일 삭제 등) 전에는 반드시 사용자에게 물어본 후 진행하기**
+- 코드 수정/커밋은 먼저 설명하고 승인받은 후 실행
+- git push는 절대 무단으로 하지 않기
+
+---
+
+## 커밋 메시지 규칙
+
+**형식:** `type: 설명`
+
+| Type | 설명 | 예시 |
+|------|------|------|
+| `feat` | 새로운 기능 추가 | `feat: Musinsa 상품 크롤링 기능 추가` |
+| `fix` | 버그 수정 | `fix: 검색 결과 중복 제거` |
+| `refactor` | 코드 리팩토링 (기능 변화 없음) | `refactor: ProductService 구조 개선` |
+| `docs` | 문서 작성/수정 | `docs: README 배포 방법 추가` |
+| `chore` | 설정/의존성/빌드 관련 | `chore: New Relic APM 에이전트 추가` |
+| `test` | 테스트 코드 추가/수정 | `test: ProductService 검색 테스트 추가` |
 
 ---
 

@@ -1,30 +1,31 @@
 package com.itemfinder.dto;
 
-import com.itemfinder.domain.product.Product;
+import com.itemfinder.domain.listing.ProductListing;
 import lombok.Getter;
-
-import java.util.List;
 
 @Getter
 public class ProductSearchResponse {
     private final Long id;
+    private final String platform;
     private final String productName;
     private final String brand;
-    private final String category;
     private final String imageUrl;
-    private final List<PriceInfoDto> prices;
-    private final Integer lowestPrice;
+    private final Integer price;
+    private final Integer originalPrice;
+    private final Integer discountRate;
+    private final String url;
+    private final Boolean inStock;
 
-    public ProductSearchResponse(Product product, List<PriceInfoDto> prices) {
-        this.id = product.getId();
-        this.productName = product.getProductName();
-        this.brand = product.getBrand();
-        this.category = product.getCategory();
-        this.imageUrl = product.getImageUrl();
-        this.prices = prices;
-        this.lowestPrice = prices.stream()
-                .mapToInt(PriceInfoDto::getPrice)
-                .min()
-                .orElse(0);
+    public ProductSearchResponse(ProductListing listing) {
+        this.id = listing.getId();
+        this.platform = listing.getPlatform();
+        this.productName = listing.getProductName();
+        this.brand = listing.getBrand();
+        this.imageUrl = listing.getImageUrl();
+        this.price = listing.getPrice();
+        this.originalPrice = listing.getOriginalPrice();
+        this.discountRate = listing.getDiscountRate();
+        this.url = listing.getUrl();
+        this.inStock = listing.getInStock();
     }
 }
