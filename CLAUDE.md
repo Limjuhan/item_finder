@@ -118,6 +118,31 @@ cd frontend && npm run dev
 
 ## 작업 규칙
 
+### Git 작업 흐름 (중요!)
+
+**새로운 기능 브랜치 시작 전:**
+```bash
+# 1. 항상 최신 main 받아오기
+git checkout main
+git pull origin main
+
+# 2. 그 다음 새 브랜치 생성
+git checkout -b feat/feature-name
+```
+
+**작업 중 main이 업데이트되었으면:**
+```bash
+git rebase origin/main
+# 또는 (더 간단함)
+git pull origin main --rebase
+```
+
+**Why:** 
+- main과 충돌을 최소화하기 위함
+- PR merge 시 충돌을 예방하기 위함
+- 여러 개의 기능 브랜치가 동시에 개발될 때 필수
+
+### 일반 작업 규칙
 **파괴적/비가역적 작업 (git push, git reset, 파일 삭제 등) 전에는 반드시 사용자에게 물어본 후 진행하기**
 - 코드 수정/커밋은 먼저 설명하고 승인받은 후 실행
 - git push는 절대 무단으로 하지 않기
