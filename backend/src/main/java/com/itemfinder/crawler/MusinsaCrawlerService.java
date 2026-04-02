@@ -2,10 +2,8 @@ package com.itemfinder.crawler;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.itemfinder.domain.price.ProductPrice;
-import com.itemfinder.domain.price.ProductPriceRepository;
-import com.itemfinder.domain.product.Product;
-import com.itemfinder.domain.product.ProductRepository;
+import com.itemfinder.domain.listing.ProductListing;
+import com.itemfinder.domain.listing.ProductListingRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,8 +27,7 @@ public class MusinsaCrawlerService implements PlatformCrawler {
     private static final String PLATFORM = "musinsa";
     private static final String SEARCH_API = "https://api.musinsa.com/api2/dp/v1/plp/goods";
 
-    private final ProductRepository productRepository;
-    private final ProductPriceRepository productPriceRepository;
+    private final ProductListingRepository productListingRepository;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
@@ -122,29 +119,22 @@ public class MusinsaCrawlerService implements PlatformCrawler {
     // 상품 1건을 독립 트랜잭션으로 저장 — 실패해도 다른 상품 저장에 영향 없음
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void upsert(CrawledProduct cp) {
-        Product product = productRepository.findByProductCode(cp.productCode())
-                .orElse(new Product());
+        ProductListing listing = productListingRepository
+                .findByPlatformAndPlatformProductId(PLATFORM, cp.productCode())
+                .orElse(new ProductListing());
 
-        product.setProductCode(cp.productCode());
-        product.setProductName(cp.name());
-        product.setBrand(cp.brand());
-        product.setImageUrl(cp.imageUrl());
-        product = productRepository.save(product);
+        listing.setPlatform(PLATFORM);
+        listing.setPlatformProductId(cp.productCode());
+        listing.setProductName(cp.name());
+        listing.setBrand(cp.brand());
+        listing.setImageUrl(cp.imageUrl());
+        listing.setPrice(cp.price());
+        listing.setOriginalPrice(cp.originalPrice());
+        listing.setDiscountRate(cp.discountRate());
+        listing.setUrl(cp.url());
+        listing.setInStock(true);
 
-        ProductPrice price = productPriceRepository
-                .findByProductIdAndPlatform(product.getId(), PLATFORM)
-                .orElse(new ProductPrice());
-
-        price.setProduct(product);
-        price.setPlatform(PLATFORM);
-        price.setPlatformProductId(cp.productCode());
-        price.setPrice(cp.price());
-        price.setOriginalPrice(cp.originalPrice());
-        price.setDiscountRate(cp.discountRate());
-        price.setUrl(cp.url());
-        price.setInStock(true);
-
-        productPriceRepository.save(price);
+        productListingRepository.save(listing);
     }
 
     record CrawledProduct(
