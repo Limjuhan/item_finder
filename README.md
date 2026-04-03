@@ -6,7 +6,7 @@
 
 ## 배포
 
-**서비스 링크:** [https://item-finder-oapp.onrender.com](https://item-finder-oapp.onrender.com)
+**서비스 링크:** [https://item-finder-oapp.onrender.com](https://item-finder-navy.vercel.app/)
 
 ---
 
