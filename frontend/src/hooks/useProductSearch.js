@@ -6,6 +6,6 @@ export function useProductSearch(query) {
     queryKey: ['products', query],
     queryFn: () => searchProducts(query),
     enabled: query.length >= 2,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0, // 항상 최신 데이터 fetch (매번 크롤링)
   });
 }
