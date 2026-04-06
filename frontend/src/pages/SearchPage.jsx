@@ -1,11 +1,28 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import SearchBar from '../components/SearchBar';
 import ProductCard from '../components/ProductCard';
 import { useProductSearch } from '../hooks/useProductSearch';
+import { crawlMusinsa } from '../api/productApi';
 
 export default function SearchPage() {
   const [query, setQuery] = useState('');
+  const queryClient = useQueryClient();
   const { data, isLoading, error } = useProductSearch(query);
+
+  const handleSearch = async (searchQuery) => {
+    setQuery(searchQuery);
+    if (searchQuery.length >= 2) {
+      try {
+        // 크롤링 실행
+        await crawlMusinsa(searchQuery);
+        // 크롤링 완료 후 캐시 무효화 → 새 데이터 자동 fetch
+        queryClient.invalidateQueries({ queryKey: ['products', searchQuery] });
+      } catch (e) {
+        console.error('Crawling failed:', e);
+      }
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -14,7 +31,7 @@ export default function SearchPage() {
           <h1 className="text-xl font-bold text-indigo-700 tracking-tight">
             ItemFinder — 패션 가격 비교
           </h1>
-          <SearchBar onSearch={setQuery} />
+          <SearchBar onSearch={handleSearch} />
         </div>
       </header>
 
