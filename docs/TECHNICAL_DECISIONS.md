@@ -57,141 +57,82 @@ HTML 파싱 없이 JSON을 직접 파싱하므로 안정적이고 빠릅니다.
 
 ### 4. 외부 API 요청 실패 시 서비스 중단
 
-**문제:** 플랫폼별 크롤링 API(무신사, 29cm, 쿠팡 등)가 고장 나거나 응답 지연이 발생하면:
-- 응답을 무한정 기다려 사용자 경험 악화
-- 연쇄적 요청으로 API 서버 부하 증가
-- 복구될 가능성 있는 오류도 반복 시도로 악화
+#### 4-1. 문제 상황
 
-**해결: Timeout + Circuit Breaker + Graceful Degradation 전략**
+ItemFinder는 실시간 가격 정보를 제공하기 위해 무신사, 29cm, 쿠팡 등 여러 플랫폼의 API를 호출합니다. 이들 API가 고장 나거나 응답이 지연되는 경우:
 
-#### 4-1. Timeout 설정 (요청당 최대 대기 시간)
+1. 응답을 무한정 기다리게 되어 사용자는 30초 이상 대기
+2. 연쇄적인 재요청으로 장애 API 서버에 추가 부하
+3. 일시적 오류도 반복 시도로 문제 악화
+4. 이 기간 동안 다른 사용자들도 같은 문제 경험
+5. 최악의 경우 전체 검색 기능 마비
 
-각 크롤링 작업에 타임아웃을 설정하여 무한 대기를 방지합니다:
+#### 4-2. 대안 검토
 
-```java
-// SearchController.java
-ExecutorService executor = Executors.newFixedThreadPool(4);
+대안1: 무한정 기다리기 (현상 유지)
+- 장점: 구현 간단
+- 단점: 사용자 경험 악화, 서버 부하 증가
 
-for (PlatformCrawler crawler : crawlers) {
-    try {
-        Future<List<ProductSearchResponse>> future = 
-            executor.submit(() -> crawler.crawl(keyword));
-        
-        // 각 플랫폼별로 설정된 타임아웃 시간 내에 결과 수신
-        List<ProductSearchResponse> results = 
-            future.get(timeout, TimeUnit.SECONDS);
-        
-        allResults.addAll(results);
-    } catch (TimeoutException e) {
-        log.warn("[{}] 타임아웃 초과", crawler.getName());
-        failedPlatforms.add(crawler.getName());
-    }
-}
-```
+대안2: 과거 캐시 데이터 반환
+- 장점: 데이터를 어라도 반환 가능
+- 단점: 사용자는 "항상 최신 정확한 데이터" 받는다고 기대하는데 1시간 전 데이터 제공, ItemFinder의 핵심 가치 훼손
 
-**타임아웃 값 결정 기준:**
-- API 응답이 정상일 때 걸리는 평균 시간 측정
-- 타임아웃 = (평균 시간 + 여유) 로 설정
-- 예시: 무신사 평균 2초 → 타임아웃 10초 설정
+대안3: Timeout + Circuit Breaker + Graceful Degradation
+- 장점: 부분 서비스 가능, 불필요한 요청 차단, 자동 복구
+- 단점: 구현 복잡도 증가
 
-#### 4-2. Circuit Breaker 패턴 (연속 실패 감지 및 차단)
+#### 4-3. 최종 결정: 대안3 채택 (Timeout + Circuit Breaker + Graceful Degradation)
 
-같은 API가 연속으로 실패하면 일정 시간 동안 요청 자체를 차단합니다:
+세 가지 전략을 조합하여 외부 API 실패에 대응합니다.
 
-```java
-@CircuitBreaker(
-    failureThreshold = 5,      // 5번 실패 시 Open
-    delay = 60000              // 60초 동안 요청 차단
-)
-public List<ProductSearchResponse> crawlMusinsa(String keyword) {
-    return musinsaCrawler.crawl(keyword);
-}
-```
+##### 타임아웃 (Timeout)
 
-**Circuit Breaker의 상태 변화:**
+각 플랫폼의 크롤링 작업에 최대 대기 시간을 설정합니다. API 응답 + 데이터 파싱이 설정된 시간 내에 완료되어야 하며, 초과할 경우 작업을 강제 중단합니다.
 
-1. **Closed (정상 상태):** 모든 요청 통과
-2. **Open (차단 상태):** 설정된 횟수 이상 실패 시 발동, 모든 요청 즉시 거부 (요청 안 함)
-3. **Half-Open (복구 확인 상태):** 차단 시간 경과 후 1회 요청으로 복구 여부 확인
-   - 성공하면 → Closed (정상화)
-   - 실패하면 → Open (다시 차단)
+결정:
+- 무신사: 10초 (평균 응답 2초 + 여유)
+- 29cm: 10초
+- 향후 추가 API도 동일하게 10초 기준
 
-**동작 예시:**
+이 설정으로 사용자는 최대 30초(3개 플랫폼 × 10초)를 기다립니다. 부분 결과가 있다면 더 빨리 반환됩니다.
 
-```
-14:00:00 사용자1 검색 → 무신사 API 호출 → 실패 (1/5)
-14:00:01 사용자2 검색 → 무신사 API 호출 → 실패 (2/5)
-...
-14:00:04 사용자5 검색 → 무신사 API 호출 → 실패 (5/5) → Circuit Open!
+##### Circuit Breaker 패턴
 
-14:00:05 ~ 14:01:04 (60초 동안):
-사용자6 검색 → 무신사? → "Open 상태이므로 요청 안 함" → 즉시 반환
+같은 API가 연속으로 실패하면 일정 기간 동안 요청을 차단하여 불필요한 재시도를 방지합니다.
 
-14:01:05 Circuit Half-Open 상태로 전환:
-사용자7 검색 → 무신사 API 호출 (1회만 시도) 
-         → 성공! → Circuit Close (정상화)
+상태 변화:
+- Closed (정상): 모든 요청 통과
+- Open (차단): 실패 횟수 초과 시 모든 요청 즉시 거부 (요청 자체를 하지 않음)
+- Half-Open (복구 확인): 차단 시간 경과 후 1회만 시도하여 복구 여부 확인
 
-14:01:06 이후:
-사용자8 검색 → 무신사 API 정상 작동
-```
+결정:
+- 무신사 (대규모 쇼핑몰, 높은 신뢰도): failureThreshold=5회, delay=60초
+- 29cm (중소 쇼핑몰, 중간 신뢰도): failureThreshold=3회, delay=30초
+- 신규 API 추가 시: failureThreshold=3회, delay=30초 기본값 적용
 
-**플랫폼별 설정 예시:**
+최적화:
+- 초기 1-2주 운영하면서 Circuit Open 로그 수집
+- 자주 Open되면 설정값 조정
+- 운영 패턴 파악 후 최종 확정
 
-```java
-// 무신사 (대규모 쇼핑몰, 신뢰도 높음)
-@CircuitBreaker(failureThreshold = 5, delay = 60000)
+##### Graceful Degradation (우아한 성능 저하)
 
-// 29cm (중소 쇼핑몰, 신뢰도 중간)
-@CircuitBreaker(failureThreshold = 3, delay = 30000)
+하나 이상의 API가 실패해도 다른 플랫폼의 데이터는 정상 반환합니다.
 
-// 신규 API (신뢰도 미지수, 보수적)
-@CircuitBreaker(failureThreshold = 3, delay = 30000)
-```
+동작:
+- 무신사 실패 → 29cm, 쿠팡 결과는 정상 반환
+- 29cm 실패 → 무신사, 쿠팡 결과는 정상 반환
+- 모든 API 실패 → 사용자에게 "현재 검색 불가능" 메시지 표시
 
-#### 4-3. Graceful Degradation (우아한 성능 저하)
+사용자에게 투명하게 알림:
+- "3개 플랫폼 검색 완료" (모두 성공)
+- "2개 플랫폼만 검색 완료 (무신사 데이터 없음)" (부분 실패)
+- "현재 검색 불가능합니다" (모두 실패)
 
-하나의 API가 실패해도 다른 플랫폼 데이터는 정상 반환합니다:
+#### 4-4. 기대 효과
 
-```java
-List<ProductSearchResponse> allResults = new ArrayList<>();
-List<String> unavailablePlatforms = new ArrayList<>();
+Timeout: 무한 대기 방지, 빠른 실패 감지
+Circuit Breaker: 불필요한 요청 차단으로 API 서버 부하 감소, 자동 복구 확인
+Graceful Degradation: 부분 서비스로 사용자 경험 개선
 
-for (PlatformCrawler crawler : crawlers) {
-    try {
-        List<ProductSearchResponse> results = crawler.crawl(keyword);
-        allResults.addAll(results);
-    } catch (Exception e) {
-        log.warn("[{}] 크롤링 실패, 계속 진행", crawler.getName());
-        unavailablePlatforms.add(crawler.getName());
-    }
-}
-
-// 사용자에게 반환
-response.setResults(allResults);
-response.setUnavailablePlatforms(unavailablePlatforms);
-```
-
-**사용자에게 표시:**
-- ✅ "3개 플랫폼 검색 완료"
-- ⚠️ "2개 플랫폼만 검색 완료 (무신사 데이터 없음)"
-- ❌ "현재 검색 불가능합니다"
-
-#### 4-4. 설정값 결정 방법
-
-| 요소 | 결정 기준 | 예시 |
-|------|---------|------|
-| **failureThreshold** | API 회사 규모 + 신뢰도 | 무신사 5회, 29cm 3회 |
-| **delay** | API 복구 예상 시간 | 무신사 60초, 29cm 30초 |
-| **timeout** | API 평균 응답 시간 + 여유 | 응답 2초 → timeout 10초 |
-
-**모니터링 기반 최적화:**
-1. 초기: 보수적으로 설정 (failureThreshold=3, delay=30초)
-2. 1-2주 운영하면서 Circuit Open 로그 수집
-3. 자주 Open되면 → 설정값 조정
-4. 운영 패턴 파악 후 최종 확정
-
-#### 4-5. 장점 요약
-
-- **타임아웃:** 무한 대기 방지, 빠른 실패
-- **Circuit Breaker:** 불필요한 요청 차단, API 서버 부하 감소, 자동 복구 확인
-- **Graceful Degradation:** 부분 서비스 가능, 사용자 경험 개선
+ItemFinder의 핵심 가치 "최신 정확한 데이터 제공"을 유지하면서도 외부 API 장애에 대응 가능합니다.
