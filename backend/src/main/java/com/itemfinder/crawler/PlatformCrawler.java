@@ -1,5 +1,8 @@
 package com.itemfinder.crawler;
 
+import com.itemfinder.dto.ProductSearchResponse;
+import java.util.List;
+
 public interface PlatformCrawler {
-    int crawl(String keyword);
+    List<ProductSearchResponse> crawl(String keyword);
 }
