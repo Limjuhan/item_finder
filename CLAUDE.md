@@ -59,9 +59,10 @@ backend/src/main/java/com/itemfinder/
 ├── cache/
 │   └── SearchCache.java               # 5분 메모리 캐시 (keyword → 크롤링 결과)
 ├── crawler/
-│   ├── MusinsaCrawlerService.java     # 무신사 API 호출 (DB 저장 제거)
-│   └── CrawlerController.java        # GET /api/products/search?query= (스트리밍 SSE)
+│   └── MusinsaCrawlerService.java     # 무신사 API 호출 (DB 저장 제거)
 ├── domain/
+│   ├── product/
+│   │   └── SearchController.java      # GET /api/search/stream?query= (스트리밍 SSE)
 │   └── search/
 │       ├── SearchHistory.java        # keyword + last_searched_at (검색 기록용)
 │       └── SearchHistoryRepository.java
@@ -78,7 +79,7 @@ frontend/src/
 ├── components/
 │   ├── SearchBar.jsx                 # 400ms 디바운스
 │   └── ProductCard.jsx              # 상품명/이미지 → 무신사 링크
-├── hooks/useProductSearch.js        # React Query (query.length >= 2)
+├── hooks/useProductSearch.js        # EventSource 기반 스트리밍 (query.length >= 2)
 └── pages/SearchPage.jsx
 ```
 
