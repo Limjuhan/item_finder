@@ -1,27 +1,38 @@
 import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import SearchBar from '../components/SearchBar';
 import ProductCard from '../components/ProductCard';
 import { useProductSearch } from '../hooks/useProductSearch';
-import { crawlMusinsa } from '../api/productApi';
+
+function groupByProductName(products) {
+  const map = new Map();
+  for (const p of products) {
+    const key = p.productName;
+    if (!map.has(key)) {
+      map.set(key, {
+        productName: p.productName,
+        brand: p.brand,
+        imageUrl: p.imageUrl,
+        prices: [],
+      });
+    }
+    map.get(key).prices.push({
+      platform: p.platform,
+      price: p.price,
+      originalPrice: p.originalPrice,
+      discountRate: p.discountRate,
+      url: p.url,
+    });
+  }
+  return Array.from(map.values());
+}
 
 export default function SearchPage() {
   const [query, setQuery] = useState('');
-  const queryClient = useQueryClient();
   const { data, isLoading, error } = useProductSearch(query);
+  const groupedData = groupByProductName(data);
 
-  const handleSearch = async (searchQuery) => {
+  const handleSearch = (searchQuery) => {
     setQuery(searchQuery);
-    if (searchQuery.length >= 2) {
-      try {
-        // 크롤링 실행
-        await crawlMusinsa(searchQuery);
-        // 크롤링 완료 후 캐시 무효화 → 새 데이터 자동 fetch
-        queryClient.invalidateQueries({ queryKey: ['products', searchQuery] });
-      } catch (e) {
-        console.error('Crawling failed:', e);
-      }
-    }
   };
 
   return (
@@ -59,32 +70,30 @@ export default function SearchPage() {
           <p className="text-center text-gray-400 mt-20 text-sm">두 글자 이상 입력하세요</p>
         )}
 
-        {isLoading && (
+        {isLoading && data.length === 0 && (
           <div className="flex justify-center mt-20">
             <div className="w-8 h-8 border-4 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />
           </div>
         )}
 
         {error && (
-          <p className="text-center text-red-500 mt-20 text-sm">
-            오류가 발생했습니다. 서버가 실행 중인지 확인하세요.
-          </p>
+          <p className="text-center text-red-500 mt-20 text-sm">{error}</p>
         )}
 
-        {data && data.length === 0 && (
+        {!isLoading && !error && groupedData.length === 0 && query.length >= 2 && (
           <p className="text-center text-gray-400 mt-20 text-sm">
             "{query}"에 대한 검색 결과가 없습니다.
-            <br />
-            <span className="text-xs">크롤링 후 다시 검색해 보세요.</span>
           </p>
         )}
 
-        {data && data.length > 0 && (
+        {groupedData.length > 0 && (
           <>
-            <p className="text-xs text-gray-400 mb-4">{data.length}개 상품</p>
+            <p className="text-xs text-gray-400 mb-4">
+              {groupedData.length}개 상품{isLoading ? ' (로딩 중...)' : ''}
+            </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {data.map(product => (
-                <ProductCard key={product.id} product={product} />
+              {groupedData.map((product, idx) => (
+                <ProductCard key={`${product.productName}-${idx}`} product={product} />
               ))}
             </div>
           </>
