@@ -1,21 +1,10 @@
-import { useState, useCallback } from 'react';
-
-function debounce(fn, delay) {
-  let timer;
-  return (...args) => {
-    clearTimeout(timer);
-    timer = setTimeout(() => fn(...args), delay);
-  };
-}
+import { useState } from 'react';
 
 export default function SearchBar({ onSearch }) {
   const [value, setValue] = useState('');
 
-  const debouncedSearch = useCallback(debounce(onSearch, 400), [onSearch]);
-
   const handleChange = (e) => {
     setValue(e.target.value);
-    debouncedSearch(e.target.value);
   };
 
   const handleSubmit = (e) => {

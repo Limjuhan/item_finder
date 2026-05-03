@@ -8,12 +8,12 @@ import com.itemfinder.domain.search.SearchHistoryRepository;
 import com.itemfinder.dto.ProductSearchResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -93,15 +93,14 @@ public class SearchController {
         return emitter;
     }
 
+    @GetMapping("/top10")
+    public List<String> top10() {
+        return searchHistoryRepository.findTop10Keywords(LocalDateTime.now().minusWeeks(1));
+    }
+
     private void saveSearchHistory(String keyword) {
         try {
-            searchHistoryRepository.findByKeyword(keyword)
-                    .ifPresentOrElse(
-                            SearchHistory::updateCrawledTime,
-                            () -> searchHistoryRepository.save(new SearchHistory(keyword))
-                    );
-        } catch (DataIntegrityViolationException e) {
-            log.debug("[SearchController] Search history duplicate for keyword: {}", keyword);
+            searchHistoryRepository.save(new SearchHistory(keyword));
         } catch (Exception e) {
             log.warn("[SearchController] Failed to save search history: {}", e.getMessage());
         }

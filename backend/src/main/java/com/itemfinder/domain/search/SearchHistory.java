@@ -16,18 +16,14 @@ public class SearchHistory {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String keyword;
 
-    @Column(name = "last_crawled")
-    private LocalDateTime lastCrawled;
+    @Column(name = "searched_at", nullable = false)
+    private LocalDateTime searchedAt;
 
     public SearchHistory(String keyword) {
         this.keyword = keyword;
-        this.lastCrawled = LocalDateTime.now();
-    }
-
-    public void updateCrawledTime() {
-        this.lastCrawled = LocalDateTime.now();
+        this.searchedAt = LocalDateTime.now();
     }
 }
