@@ -31,8 +31,9 @@
 - **확장성**: 플랫폼 추가 시에도 구조 변화 없음
 
 **search_history 용도:**
+- **인기 검색어 TOP 10**: 최근 7일 기준 검색 횟수 집계 → `GET /api/search/top10`
 - Phase 2 예정: "자주 검색된 키워드 자동 갱신 스케줄러"
-- 키워드별 검색 시간 기록 (frequency 분석용)
+- 키워드별 검색 로그 기록 (검색마다 새 row insert, unique 제약 없음)
 
 **주의: ProductListing 테이블은 더 이상 사용하지 않음**
 - 이유: 같은 상품을 플랫폼별로 매칭할 방법이 없어서 의미 있는 데이터 수집 불가능
@@ -62,10 +63,10 @@ backend/src/main/java/com/itemfinder/
 │   └── MusinsaCrawlerService.java     # 무신사 API 호출 (DB 저장 제거)
 ├── domain/
 │   ├── product/
-│   │   └── SearchController.java      # GET /api/search/stream?query= (스트리밍 SSE)
+│   │   └── SearchController.java      # GET /api/search/stream (SSE), GET /api/search/top10
 │   └── search/
-│       ├── SearchHistory.java        # keyword + last_searched_at (검색 기록용)
-│       └── SearchHistoryRepository.java
+│       ├── SearchHistory.java        # keyword + searched_at (검색마다 insert, 로그 방식)
+│       └── SearchHistoryRepository.java  # findTop10Keywords (최근 7일 기준)
 └── dto/
     └── ProductSearchResponse.java     # 크롤링 결과 DTO
 
@@ -77,7 +78,7 @@ backend/src/main/java/com/itemfinder/
 frontend/src/
 ├── api/productApi.js                 # Axios 호출 모음
 ├── components/
-│   ├── SearchBar.jsx                 # 400ms 디바운스
+│   ├── SearchBar.jsx                 # 엔터/버튼 입력 시에만 검색 실행
 │   └── ProductCard.jsx              # 상품명/이미지 → 무신사 링크
 ├── hooks/useProductSearch.js        # EventSource 기반 스트리밍 (query.length >= 2)
 └── pages/SearchPage.jsx

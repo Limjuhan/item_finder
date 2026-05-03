@@ -52,13 +52,13 @@ HTML 파싱 없이 JSON을 직접 파싱하므로 안정적이고 빠릅니다.
 
 ---
 
-#### 3. 동시 요청 시 search_history 중복 키 처리 (계속 유지)
+#### 3. 동시 요청 시 search_history 중복 키 처리 (해결됨)
 
-**문제:** 두 사용자가 동시에 같은 키워드를 처음 검색하면, 둘 다 `search_history`에 해당 키워드가 없다고 판단하고 동시에 INSERT를 시도합니다. `keyword` 컬럼의 UNIQUE 제약으로 하나는 `DataIntegrityViolationException`이 발생합니다.
+**당시 문제:** 두 사용자가 동시에 같은 키워드를 처음 검색하면, 둘 다 `search_history`에 해당 키워드가 없다고 판단하고 동시에 INSERT를 시도합니다. `keyword` 컬럼의 UNIQUE 제약으로 하나는 `DataIntegrityViolationException`이 발생합니다.
 
-**해결:** `DataIntegrityViolationException`을 catch하여 정상 처리합니다. SearchController에서 예외를 무시하고 계속 진행하므로 사용자는 검색 결과를 정상 수신합니다.
+**당시 해결:** `DataIntegrityViolationException`을 catch하여 정상 처리했습니다.
 
-**현재 상태:** 이 문제는 여전히 발생 가능하며, catch 처리로 대응하고 있습니다.
+**현재 상태:** `search_history` 구조를 로그 방식으로 변경 (검색마다 새 row insert, keyword unique 제약 제거)하면서 이 문제는 더 이상 발생하지 않습니다. upsert 로직 자체가 제거되었습니다.
 
 ---
 
