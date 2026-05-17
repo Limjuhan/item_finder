@@ -6,8 +6,10 @@ import com.itemfinder.crawler.PlatformCrawler;
 import com.itemfinder.domain.search.SearchHistory;
 import com.itemfinder.domain.search.SearchHistoryRepository;
 import com.itemfinder.dto.ProductSearchResponse;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -32,10 +34,19 @@ public class SearchController {
     private final SearchHistoryRepository searchHistoryRepository;
     private final ObjectMapper objectMapper;
 
-    // 동시 검색 요청 처리 전용 (최대 5건)
-    private final ExecutorService requestExecutor = Executors.newFixedThreadPool(5);
-    // 플랫폼 병렬 크롤링 전용 (플랫폼 수 2 × 동시 검색 5)
-    private final ExecutorService crawlExecutor = Executors.newFixedThreadPool(10);
+    @Value("${crawler.thread.request-pool-size:5}")
+    private int requestPoolSize;
+    @Value("${crawler.thread.crawl-pool-size:10}")
+    private int crawlPoolSize;
+
+    private ExecutorService requestExecutor;
+    private ExecutorService crawlExecutor;
+
+    @PostConstruct
+    public void initExecutors() {
+        requestExecutor = Executors.newFixedThreadPool(requestPoolSize);
+        crawlExecutor = Executors.newFixedThreadPool(crawlPoolSize);
+    }
 
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream(@RequestParam String keyword) {
