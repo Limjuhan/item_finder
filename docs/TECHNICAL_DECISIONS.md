@@ -244,3 +244,31 @@ List<String> failedPlatforms = new CopyOnWriteArrayList<>();
 ```
 
 `SseEmitter.send()`는 동시 호출 시 응답이 섞일 수 있으므로 `synchronized`로 한 번에 하나씩만 전송합니다.
+
+---
+
+## 알려진 보안 이슈
+
+### CORS 전체 오리진 허용
+
+**현재 설정 (`WebConfig.java`):**
+```java
+registry.addMapping("/api/**")
+        .allowedOriginPatterns("*")
+        .allowedMethods("GET", "POST", "PUT", "DELETE")
+        .allowedHeaders("*");
+```
+
+**문제:**
+`allowedOriginPatterns("*")`는 모든 출처(도메인)에서 오는 요청을 허용합니다. 프로덕션 환경에서는 외부의 임의 사이트가 ItemFinder API를 직접 호출할 수 있어 보안상 위험합니다.
+
+**프로덕션 기준 올바른 설정:**
+```java
+registry.addMapping("/api/**")
+        .allowedOrigins("https://itemfinder.com")
+        .allowedMethods("GET")
+        .allowedHeaders("Content-Type");
+```
+
+**현재 상태:**
+개발 단계에서는 프론트엔드 개발 서버(`localhost:5173`) 및 다양한 로컬 환경에서 자유롭게 API를 호출할 수 있어야 하므로, 이 문제를 인지한 상태에서 의도적으로 `*`로 열어두고 있습니다. 프로덕션 배포 시 실제 서비스 도메인으로 제한해야 합니다.
