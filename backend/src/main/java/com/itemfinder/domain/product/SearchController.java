@@ -6,17 +6,20 @@ import com.itemfinder.crawler.PlatformCrawler;
 import com.itemfinder.domain.search.SearchHistory;
 import com.itemfinder.domain.search.SearchHistoryRepository;
 import com.itemfinder.dto.ProductSearchResponse;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -31,7 +34,19 @@ public class SearchController {
     private final SearchHistoryRepository searchHistoryRepository;
     private final ObjectMapper objectMapper;
 
-    private final ExecutorService executor = Executors.newFixedThreadPool(4);
+    @Value("${crawler.thread.request-pool-size:5}")
+    private int requestPoolSize;
+    @Value("${crawler.thread.crawl-pool-size:10}")
+    private int crawlPoolSize;
+
+    private ExecutorService requestExecutor;
+    private ExecutorService crawlExecutor;
+
+    @PostConstruct
+    public void initExecutors() {
+        requestExecutor = Executors.newFixedThreadPool(requestPoolSize);
+        crawlExecutor = Executors.newFixedThreadPool(crawlPoolSize);
+    }
 
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream(@RequestParam String keyword) {
@@ -51,27 +66,34 @@ public class SearchController {
             return emitter;
         }
 
-        executor.submit(() -> {
-            List<ProductSearchResponse> allResults = new ArrayList<>();
-            List<String> failedPlatforms = new ArrayList<>();
+        requestExecutor.submit(() -> {
+            List<ProductSearchResponse> allResults = new CopyOnWriteArrayList<>();
+            List<String> failedPlatforms = new CopyOnWriteArrayList<>();
+
             try {
-                for (PlatformCrawler crawler : crawlers) {
-                    try {
-                        List<ProductSearchResponse> results = crawler.crawl(normalizedKeyword);
-                        allResults.addAll(results);
-                        emitter.send(
-                            SseEmitter.event()
-                                .name("data")
-                                .data(objectMapper.writeValueAsString(results))
-                        );
-                        log.info("[SearchController] Sent {} products from {} for keyword: {}",
-                                results.size(), crawler.getPlatformName(), normalizedKeyword);
-                    } catch (Exception e) {
-                        failedPlatforms.add(crawler.getPlatformName());
-                        log.warn("[SearchController] {} crawler failed: {}",
-                                crawler.getPlatformName(), e.getMessage());
-                    }
-                }
+                // 모든 플랫폼 병렬 크롤링 시작
+                List<CompletableFuture<Void>> futures = crawlers.stream()
+                        .map(crawler -> CompletableFuture.runAsync(() -> {
+                            try {
+                                List<ProductSearchResponse> results = crawler.crawl(normalizedKeyword);
+                                allResults.addAll(results);
+                                synchronized (emitter) {
+                                    emitter.send(SseEmitter.event()
+                                            .name("data")
+                                            .data(objectMapper.writeValueAsString(results)));
+                                }
+                                log.info("[SearchController] Sent {} products from {} for keyword: {}",
+                                        results.size(), crawler.getPlatformName(), normalizedKeyword);
+                            } catch (Exception e) {
+                                failedPlatforms.add(crawler.getPlatformName());
+                                log.warn("[SearchController] {} crawler failed: {}",
+                                        crawler.getPlatformName(), e.getMessage());
+                            }
+                        }, crawlExecutor))
+                        .toList();
+
+                // 전체 완료 대기
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
 
                 if (!allResults.isEmpty()) {
                     searchCache.put(normalizedKeyword, allResults);
@@ -81,10 +103,12 @@ public class SearchController {
 
                 String donePayload = objectMapper.writeValueAsString(
                         Map.of("failedPlatforms", failedPlatforms));
-                emitter.send(SseEmitter.event().name("done").data(donePayload));
+                synchronized (emitter) {
+                    emitter.send(SseEmitter.event().name("done").data(donePayload));
+                }
                 emitter.complete();
 
-            } catch (IOException e) {
+            } catch (Exception e) {
                 log.warn("[SearchController] SSE write failed (client disconnected?): {}", e.getMessage());
                 emitter.completeWithError(e);
             }
