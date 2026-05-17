@@ -186,3 +186,97 @@ data: {"failedPlatforms": []}           // 전체 성공 시
 | Circuit이 너무 자주 열림 (하루 수십 회) | failureThreshold 증가 (3회 → 5회) |
 | Circuit 차단 중 API가 이미 복구된 경우가 많음 | delay 단축 (30초 → 15초) |
 | Circuit이 열려도 오래 닫히지 않음 | delay 증가 (30초 → 60초) |
+
+---
+
+### 5. 순차 크롤링 → 병렬 크롤링 전환
+
+#### 5-1. 문제 상황
+
+초기 구현에서 플랫폼 크롤링은 순차 실행이었습니다.
+
+```
+무신사 크롤링 (2초) → 29cm 크롤링 (3초) = 총 5초
+```
+
+양쪽 API가 모두 실패(타임아웃)하는 최악의 경우:
+
+```
+무신사 타임아웃 (5초) → 29cm 타임아웃 (5초) = 총 10초 대기
+```
+
+플랫폼이 늘수록 최악 대기 시간이 선형으로 증가합니다. 3개면 15초, 4개면 20초.
+
+#### 5-2. 해결 방향: 병렬 실행 (CompletableFuture)
+
+각 플랫폼 크롤링을 동시에 시작하면 대기 시간이 가장 느린 플랫폼 하나 기준으로 줄어듭니다.
+
+```
+무신사 크롤링 (2초) ─┐
+                      ├─ 동시 실행 → 총 3초
+29cm 크롤링 (3초)   ─┘
+```
+
+양쪽 실패 시: max(5초, 5초) = **5초** (순차 대비 절반)
+
+SSE 스트리밍과도 잘 맞습니다. 빠른 플랫폼 결과가 완료되는 즉시 전송되므로 사용자는 결과를 더 일찍 볼 수 있습니다.
+
+#### 5-3. 단일 Executor 사용 시 데드락 문제
+
+기존 `ExecutorService executor`를 병렬 크롤링에 그대로 재사용하면 데드락이 발생할 수 있습니다.
+
+**문제 시나리오 (스레드풀 크기 4 기준):**
+
+```
+사용자A 검색 → 스레드1 점유 (외부 작업 대기 중)
+사용자B 검색 → 스레드2 점유 (외부 작업 대기 중)
+사용자C 검색 → 스레드3 점유 (외부 작업 대기 중)
+사용자D 검색 → 스레드4 점유 (외부 작업 대기 중)
+
+스레드풀이 꽉 찬 상태에서:
+사용자A의 내부 병렬 작업(무신사, 29cm)이 스레드를 요청
+  → 스레드풀에 빈 스레드 없음
+  → 스레드1은 내부 작업이 끝나길 기다림
+  → 내부 작업은 스레드를 기다림
+  → 서로 기다리다가 영원히 끝나지 않음 (데드락)
+```
+
+이는 같은 스레드풀을 외부 작업(요청 처리)과 내부 작업(플랫폼 크롤링)이 함께 사용할 때 발생하는 **스레드 고갈(Thread Starvation)** 문제입니다.
+
+#### 5-4. 최종 결정: Executor 두 개로 분리
+
+```java
+// 검색 요청 처리 전용 — 동시 검색 수 제한
+ExecutorService requestExecutor = Executors.newFixedThreadPool(5);
+
+// 플랫폼 병렬 크롤링 전용 — 데드락 구조적 차단
+ExecutorService crawlExecutor = Executors.newFixedThreadPool(10);
+```
+
+역할을 분리하여 두 풀이 서로 독립적으로 동작합니다. 외부 작업(requestExecutor)이 내부 작업(crawlExecutor)의 스레드를 기다리더라도, crawlExecutor는 별도 풀이므로 항상 스레드를 확보할 수 있습니다.
+
+**스레드 수 결정 근거:**
+
+| Executor | 크기 | 근거 |
+|---|---|---|
+| requestExecutor | 5 | 소규모 서비스 기준 현실적인 동시 검색 사용자 수 |
+| crawlExecutor | 10 | 플랫폼 수(2) × 동시 검색 수(5) |
+
+> **주의:** 위 수치는 측정 데이터 없이 소규모 서비스 기준으로 산정한 초기 추정값입니다.
+> 플랫폼이 추가될 때마다 `crawlExecutor` 크기를 `플랫폼 수 × 5`로 조정해야 합니다.
+
+**공유 자원 동시 접근 처리:**
+
+병렬 실행 시 여러 스레드가 동시에 접근하는 자원은 Thread-safe 자료구조로 교체합니다.
+
+```java
+// 변경 전 (동시 접근 위험)
+List<ProductSearchResponse> allResults = new ArrayList<>();
+List<String> failedPlatforms = new ArrayList<>();
+
+// 변경 후 (Thread-safe)
+List<ProductSearchResponse> allResults = new CopyOnWriteArrayList<>();
+List<String> failedPlatforms = new CopyOnWriteArrayList<>();
+```
+
+`SseEmitter.send()`는 동시 호출 시 응답이 섞일 수 있으므로 `synchronized`로 한 번에 하나씩만 전송합니다.
