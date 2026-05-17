@@ -53,19 +53,15 @@ export function useProductSearch(keyword) {
     });
 
     es.addEventListener('error', (e) => {
-      setError('검색 중 오류가 발생했습니다.');
+      if (es.readyState === EventSource.CLOSED) return;
+      const message = e.data
+        ? '검색 중 오류가 발생했습니다.'
+        : '서버 연결에 실패했습니다. 서버가 실행 중인지 확인하세요.';
+      setError(message);
       setIsLoading(false);
       es.close();
       esRef.current = null;
     });
-
-    es.onerror = () => {
-      if (es.readyState === EventSource.CLOSED) return;
-      setError('서버 연결에 실패했습니다. 서버가 실행 중인지 확인하세요.');
-      setIsLoading(false);
-      es.close();
-      esRef.current = null;
-    };
 
     return () => {
       if (esRef.current) {

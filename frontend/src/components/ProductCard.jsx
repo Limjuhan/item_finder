@@ -5,7 +5,7 @@ const PLATFORM_LABELS = {
 };
 
 function formatPrice(price) {
-  return price?.toLocaleString('ko-KR') + '원';
+  return price != null ? price.toLocaleString('ko-KR') + '원' : '가격정보없음';
 }
 
 export default function ProductCard({ product }) {
