@@ -5,4 +5,5 @@ import java.util.List;
 
 public interface PlatformCrawler {
     List<ProductSearchResponse> crawl(String keyword);
+    String getPlatformName();
 }

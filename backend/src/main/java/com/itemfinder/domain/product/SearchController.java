@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -43,7 +44,6 @@ public class SearchController {
         String normalizedKeyword = keyword.trim();
         SseEmitter emitter = new SseEmitter(60_000L);
 
-        // 캐시 히트
         List<ProductSearchResponse> cached = searchCache.get(normalizedKeyword);
         if (cached != null) {
             log.info("[SearchController] Cache HIT for keyword: {}", normalizedKeyword);
@@ -51,37 +51,37 @@ public class SearchController {
             return emitter;
         }
 
-        // 캐시 미스 — 별도 스레드에서 크롤링
         executor.submit(() -> {
             List<ProductSearchResponse> allResults = new ArrayList<>();
+            List<String> failedPlatforms = new ArrayList<>();
             try {
                 for (PlatformCrawler crawler : crawlers) {
                     try {
                         List<ProductSearchResponse> results = crawler.crawl(normalizedKeyword);
                         allResults.addAll(results);
-                        // 플랫폼 크롤링 완료 즉시 전송
                         emitter.send(
                             SseEmitter.event()
                                 .name("data")
                                 .data(objectMapper.writeValueAsString(results))
                         );
-                        log.info("[SearchController] Sent {} products for keyword: {}",
-                                results.size(), normalizedKeyword);
+                        log.info("[SearchController] Sent {} products from {} for keyword: {}",
+                                results.size(), crawler.getPlatformName(), normalizedKeyword);
                     } catch (Exception e) {
-                        log.warn("[SearchController] Crawler failed: {}", e.getMessage());
+                        failedPlatforms.add(crawler.getPlatformName());
+                        log.warn("[SearchController] {} crawler failed: {}",
+                                crawler.getPlatformName(), e.getMessage());
                     }
                 }
 
-                // 전체 결과 캐시 저장
                 if (!allResults.isEmpty()) {
                     searchCache.put(normalizedKeyword, allResults);
                 }
 
-                // SearchHistory 저장
                 saveSearchHistory(normalizedKeyword);
 
-                // 완료 신호
-                emitter.send(SseEmitter.event().name("done").data(""));
+                String donePayload = objectMapper.writeValueAsString(
+                        Map.of("failedPlatforms", failedPlatforms));
+                emitter.send(SseEmitter.event().name("done").data(donePayload));
                 emitter.complete();
 
             } catch (IOException e) {

@@ -5,10 +5,10 @@ export function useProductSearch(keyword) {
   const [products, setProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [failedPlatforms, setFailedPlatforms] = useState([]);
   const esRef = useRef(null);
 
   useEffect(() => {
-    // 이전 연결 정리
     if (esRef.current) {
       esRef.current.close();
       esRef.current = null;
@@ -18,11 +18,13 @@ export function useProductSearch(keyword) {
       setProducts([]);
       setIsLoading(false);
       setError(null);
+      setFailedPlatforms([]);
       return;
     }
 
     setProducts([]);
     setError(null);
+    setFailedPlatforms([]);
     setIsLoading(true);
 
     const url = getSearchStreamUrl(keyword);
@@ -32,15 +34,20 @@ export function useProductSearch(keyword) {
     es.addEventListener('data', (e) => {
       try {
         const newProducts = JSON.parse(e.data);
-        // 플랫폼 크롤링 결과 누적
         setProducts(prev => [...prev, ...newProducts]);
       } catch (err) {
         console.error('Failed to parse SSE data:', err);
       }
     });
 
-    es.addEventListener('done', () => {
+    es.addEventListener('done', (e) => {
       setIsLoading(false);
+      try {
+        const { failedPlatforms: failed } = JSON.parse(e.data);
+        if (failed?.length > 0) setFailedPlatforms(failed);
+      } catch {
+        // done 데이터 파싱 실패 시 무시
+      }
       es.close();
       esRef.current = null;
     });
@@ -68,5 +75,5 @@ export function useProductSearch(keyword) {
     };
   }, [keyword]);
 
-  return { data: products, isLoading, error };
+  return { data: products, isLoading, error, failedPlatforms };
 }

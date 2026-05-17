@@ -30,7 +30,7 @@ function groupByProductName(products) {
 export default function SearchPage() {
   const [query, setQuery] = useState('');
   const [top10, setTop10] = useState([]);
-  const { data, isLoading, error } = useProductSearch(query);
+  const { data, isLoading, error, failedPlatforms } = useProductSearch(query);
   const groupedData = groupByProductName(data);
 
   useEffect(() => {
@@ -103,6 +103,12 @@ export default function SearchPage() {
 
         {error && (
           <p className="text-center text-red-500 mt-20 text-sm">{error}</p>
+        )}
+
+        {failedPlatforms.length > 0 && (
+          <div className="mb-4 px-4 py-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+            ⚠️ {failedPlatforms.join(', ')} 검색에 실패했습니다. 일부 결과가 누락될 수 있습니다.
+          </div>
         )}
 
         {!isLoading && !error && groupedData.length === 0 && query.length >= 2 && (
