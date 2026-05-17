@@ -10,7 +10,7 @@
 ## 기술 스택
 - **Backend**: Java 21, Spring Boot 3.5, Spring Data JPA, MySQL 8.0
 - **Frontend**: React 18, Vite, TanStack Query v5, Axios, Tailwind CSS v3
-- **크롤링**: Java HttpClient + Jackson (Jsoup 불가 — 무신사는 JS 렌더링)
+- **크롤링**: Java HttpClient + Jackson (Jsoup 불가 — JS 렌더링 사이트)
 
 ---
 
@@ -46,9 +46,13 @@
 - API: `https://api.musinsa.com/api2/dp/v1/plp/goods?keyword=...&gf=M&pageNumber=1&pageSize=50&sortCode=POPULAR&caller=SEARCH`
 - 상세: first N=10을 파싱해서 저장 (pageNumber 파라미터 미작동 확인)
 
-### DB 검색 방식
-- `LIKE %keyword%` 로 `product_name`, `brand`, `product_code` 검색
-- 카테고리 검색("상의", "팬츠" 등)은 지원 안 함 — 상품명/브랜드명 검색만 가능
+### 29cm 크롤링 방식
+- Jsoup 사용 불가 (JS 렌더링 페이지)
+- 29cm 내부 검색 API 직접 호출
+- **최대 10개 상품만** 크롤링 (성능 최적화)
+- API: `https://search-api.29cm.co.kr/api/v4/products?keyword=...&limit=50&offset=0`
+- 상품 URL: `https://product.29cm.co.kr/catalog/{itemNo}`
+- 주요 응답 필드: `itemNo`, `itemName`, `frontBrandNameKor`, `imageUrl`, `saleInfoV2.totalSellPrice`, `saleInfoV2.totalSaleRate`
 
 ---
 
@@ -60,7 +64,9 @@ backend/src/main/java/com/itemfinder/
 ├── cache/
 │   └── SearchCache.java               # 5분 메모리 캐시 (keyword → 크롤링 결과)
 ├── crawler/
-│   └── MusinsaCrawlerService.java     # 무신사 API 호출 (DB 저장 제거)
+│   ├── PlatformCrawler.java           # 크롤러 인터페이스
+│   ├── MusinsaCrawlerService.java     # 무신사 API 호출
+│   └── TwentyCmCrawlerService.java   # 29cm API 호출
 ├── domain/
 │   ├── product/
 │   │   └── SearchController.java      # GET /api/search/stream (SSE), GET /api/search/top10
@@ -171,7 +177,8 @@ git pull origin main --rebase
 ---
 
 ## Phase 2 예정
-- **29cm, 쿠팡 등 플랫폼 추가** — 새 CrawlerService 구현 (기존 MusinsaCrawlerService와 동일 패턴)
+- ~~**29cm 플랫폼 추가**~~ — 완료 (`TwentyCmCrawlerService`)
+- **쿠팡 등 추가 플랫폼** — 새 CrawlerService 구현 (기존 크롤러와 동일 패턴)
 - **검색 키워드 자동 갱신 스케줄러** — SearchHistory 기반으로 자주 검색된 키워드 주기적으로 갱신
 - ~~가격 변동 그래프~~ — 현재 구조에서는 불가능 (과거 가격 데이터 없음)
 - ~~가격 알림 기능~~ — Phase 2에서 검토
