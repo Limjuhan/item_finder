@@ -62,7 +62,7 @@ export default function SearchPage() {
               <p className="text-gray-700 text-sm mb-2"><strong>더 정확한 검색을 원한다면:</strong></p>
               <ul className="text-gray-600 text-xs space-y-1 text-left">
                 <li>✓ 구체적인 상품명 — <span className="text-gray-800 font-medium">나이키 에어포스1 07 로우</span></li>
-                <li>✓ 제품 번호 — <span className="text-gray-800 font-medium">CW2288-111</span></li>
+                <li>✓ 제품 번호 — <span className="text-gray-800 font-medium">VN000CW2CX11</span></li>
                 <li>✗ 두루뭉실한 검색 — <span className="text-gray-400">나이키 운동화, 흰색 신발</span></li>
               </ul>
             </div>
